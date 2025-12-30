@@ -347,10 +347,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"✅ অ্যাডমিন ইউজারনেম সেট করা হয়েছে: {username}", reply_markup=get_admin_menu_kb())
             return
 
-    # --- GROUP CHAT IGNORE ---
+        # --- GROUP CHAT KEYWORD FILTER ---
     if update.effective_chat.type != 'private':
-        if msg.upper() == "IT""হ্যালো""কি কাজ""hello""Hi""আমি কাজ করতে চাই""কাজ কি""আমি নতুন""আমি গ্রুপের নতুন মেম্বার""ami group e number""Ami notun":
-            await update.message.reply_text(f"{user.mention_html()}, কাজের জন্য ইনবক্সে আসুন।", parse_mode=ParseMode.HTML)
+        # "IT" সহ আপনার দেওয়া সব কিওয়ার্ডের তালিকা
+        keywords = [
+            "IT", 
+            "হ্যালো", 
+            "কি কাজ", 
+            "HELLO", 
+            "HI", 
+            "আমি কাজ করতে চাই", 
+            "কাজ কি", 
+            "আমি নতুন", 
+            "আমি গ্রুপের নতুন মেম্বার", 
+            "AMI GROUP E NUMBER", 
+            "AMI NOTUN"
+        ]
+        
+        # মেসেজটি থেকে অপ্রয়োজনীয় স্পেস সরিয়ে বড় হাতের অক্ষরে কনভার্ট করা হচ্ছে
+        incoming_msg = msg.strip().upper() if msg else ""
+
+        # কিওয়ার্ড লিস্টের কোনো একটি শব্দ ইউজারের মেসেজে আছে কি না তা চেক করা হচ্ছে
+        if any(word.upper() in incoming_msg for word in keywords):
+            await update.message.reply_text(
+                f"{user.mention_html()}, কাজের জন্য ইনবক্সে আসুন।", 
+                parse_mode=ParseMode.HTML
+            )
+            return
+        
         return
 
     # --- USER LOGIC ---
