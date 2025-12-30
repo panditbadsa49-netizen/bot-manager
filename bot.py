@@ -265,9 +265,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         slip += f"━━━━━━━━━━━━━━━\n"
         for item in user_data["answers"]:
             slip += f"• {item['a']}\n"
-        slip += f"━━━━━━━━━━━━━━━\nএই স্লিপটি এডমিনকে দিন AfMdshakil
+        slip += f"━━━━━━━━━━━━━━━\nএই স্লিপটি এডমিনকে দিন।"
 
-এখানে আসুন।"
+।"
         
         await update.message.reply_text(slip, parse_mode=ParseMode.HTML)
         # অটো এডমিন নোটিফিকেশন
