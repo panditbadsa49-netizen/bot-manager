@@ -4,6 +4,7 @@ import logging
 import asyncio
 import threading
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -22,45 +23,73 @@ from rapidfuzz.fuzz import token_set_ratio
 
 # --- CONFIGURATION ---
 TOKEN = os.environ.get("BOT_TOKEN", "")
+# একাধিক অ্যাডমিন আইডি কমা দিয়ে আলাদা করে রাখা যাবে
 ADMIN_IDS_STR = os.environ.get("ADMIN_IDS", "7870088579,7259050773")
 GROUP_CHAT_ID = os.environ.get("GROUP_CHAT_ID", "-1002337825231")
 SERVICE_ACCOUNT_JSON = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "")
 
+# অ্যাডমিন আইডি পার্স করা
 try:
     ADMIN_IDS = [int(x.strip()) for x in ADMIN_IDS_STR.split(",") if x.strip().isdigit()]
 except:
-    ADMIN_IDS = [7870088579, 7259050773]
+    ADMIN_IDS = []
 
 # --- FIREBASE SETUP ---
-if SERVICE_ACCOUNT_JSON:
-    cred_dict = json.loads(SERVICE_ACCOUNT_JSON)
-    cred = credentials.Certificate(cred_dict)
-    firebase_admin.initialize_app(cred)
-else:
-    # Local testing fallback
-    cred = credentials.Certificate("serviceAccountKey.json")
-    firebase_admin.initialize_app(cred)
+if not firebase_admin._apps:
+    if SERVICE_ACCOUNT_JSON:
+        cred_dict = json.loads(SERVICE_ACCOUNT_JSON)
+        cred = credentials.Certificate(cred_dict)
+        firebase_admin.initialize_app(cred)
+    else:
+        # লোকাল টেস্টিং এর জন্য
+        if os.path.exists("serviceAccountKey.json"):
+            cred = credentials.Certificate("serviceAccountKey.json")
+            firebase_admin.initialize_app(cred)
+        else:
+            print("Warning: Firebase Credentials not found!")
 
 db = firestore.client()
 users_ref = db.collection("users")
+settings_ref = db.collection("bot_settings").document("config")
+stats_ref = db.collection("bot_stats").document("general")
+
+# --- ASYNC FIREBASE WRAPPER (To make bot fast) ---
+# ফায়ারবেস অপারেশনগুলো আলাদা থ্রেডে চালানো হবে যাতে বট স্লো না হয়
+executor = ThreadPoolExecutor(max_workers=5)
+
+async def async_firestore_get(doc_ref):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(executor, doc_ref.get)
+
+async def async_firestore_set(doc_ref, data, merge=True):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(executor, lambda: doc_ref.set(data, merge=merge))
+
+async def async_firestore_update(doc_ref, data):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(executor, lambda: doc_ref.update(data))
 
 # --- FLASK SERVER (Health Check) ---
 app = Flask(__name__)
+
 @app.route('/')
 def home():
-    return "Skyzone IT Bot is Running with Firebase!"
+    return "Skyzone IT Bot V2 is Running!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port, use_reloader=False)
+    try:
+        app.run(host='0.0.0.0', port=port, use_reloader=False)
+    except Exception as e:
+        print(f"Flask Error: {e}")
 
 # --- LOGGING ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- CONFIG DATA ---
-CONFIG = {
-    "video_link": "https://t.me/skyzoneit/6300",
+# --- STATIC DATA (Terms & Questions) ---
+# এই ডাটাগুলো পরিবর্তন করা হয়নি, আপনার নির্দেশ মত
+STATIC_CONFIG = {
     "terms_text": """ ⚠️ **আপনাকে এই শর্তগুলো দেওয়া হলো** ⚠️ 
 
 1️⃣ সাবধান: যে অ্যাপের জন্য টেক্সট তৈরি করা হবে, সেই অ্যাপেই রিভিউ দিতে হবে। ওই টেক্সট দিয়ে অন্য কোনো অ্যাপে রিভিউ দেওয়া যাবে না।
@@ -136,20 +165,57 @@ QUESTIONS = [
     {"id": 10, "q": "🔟 আপনি কীভাবে মার্কেটিং করতে চান? (সংক্ষেপে)", "a": ["Facebook e post kore", "ফেসবুক মার্কেটিং করে", "ফেসবুক মার্কেটিং করে বিভিন্ন গ্রুপে পোস্ট করে", "ফেসবুক গ্রুপে পোস্ট করে", "userder sathe contect kore", "social media", "marketing kore"], "threshold": 50}
 ]
 
+# --- DYNAMIC CONFIG MANAGER ---
+# ভিডিও লিংক এবং এডমিন ইউজারনেম ফায়ারবেস থেকে আসবে
+async def get_bot_config():
+    try:
+        doc = await async_firestore_get(settings_ref)
+        if doc.exists:
+            return doc.to_dict()
+    except Exception as e:
+        logger.error(f"Config Fetch Error: {e}")
+    
+    # ডিফল্ট ডাটা যদি ফায়ারবেসে কিছু না থাকে
+    return {
+        "video_link": "https://t.me/skyzoneit/6300",
+        "admin_username": "@SKYZONE_IT_ADMIN" 
+    }
+
+async def update_bot_config(key, value):
+    await async_firestore_set(settings_ref, {key: value}, merge=True)
+
+async def increment_stat(field):
+    # Atomic increment
+    try:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(executor, lambda: stats_ref.set({field: firestore.Increment(1)}, merge=True))
+    except Exception as e:
+        logger.error(f"Stats Increment Error: {e}")
+
+async def get_stats():
+    try:
+        doc = await async_firestore_get(stats_ref)
+        if doc.exists:
+            return doc.to_dict()
+    except:
+        pass
+    return {"passed_users": 0, "total_interviews": 0}
+
 # --- DATABASE HELPERS ---
-def get_user_data(user_id):
-    doc = users_ref.document(str(user_id)).get()
+async def get_user_data(user_id):
+    doc = await async_firestore_get(users_ref.document(str(user_id)))
     if doc.exists:
         return doc.to_dict()
     return {"state": "IDLE", "q_index": 0, "answers": [], "passed": False}
 
-def update_user_data(user_id, data):
-    users_ref.document(str(user_id)).set(data, merge=True)
+async def update_user_data(user_id, data):
+    await async_firestore_set(users_ref.document(str(user_id)), data)
 
-def reset_user(user_id):
-    users_ref.document(str(user_id)).delete()
+async def delete_user_data(user_id):
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(executor, lambda: users_ref.document(str(user_id)).delete())
 
-# --- INTERFACE HELPERS ---
+# --- KEYBOARDS ---
 def get_main_menu_kb():
     keyboard = [
         [InlineKeyboardButton("🚀 ইন্টারভিউ শুরু করুন", callback_data="start_exam")],
@@ -158,15 +224,42 @@ def get_main_menu_kb():
     ]
     return InlineKeyboardMarkup(keyboard)
 
+def get_admin_menu_kb():
+    keyboard = [
+        [InlineKeyboardButton("📊 পরিসংখ্যান (Stats)", callback_data="admin_stats")],
+        [InlineKeyboardButton("🎥 ভিডিও লিংক পরিবর্তন", callback_data="admin_set_video")],
+        [InlineKeyboardButton("👤 অ্যাডমিন ইউজারনেম সেট", callback_data="admin_set_username")],
+        [InlineKeyboardButton("❌ প্যানেল বন্ধ করুন", callback_data="admin_close")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
 # --- HANDLERS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if update.effective_chat.type != 'private': return
-    
-    await update.message.reply_text(
-        f"হ্যালো {user.first_name}! 👋\n\nSkyzone IT-তে স্বাগতম। কাজ শুরু করার জন্য আগে ভিডিওটি দেখুন এবং নিচের বাটনে ক্লিক করে ইন্টারভিউ শুরু করুন।",
-        reply_markup=get_main_menu_kb()
-    )
+    chat_type = update.effective_chat.type
+
+    # প্রাইভেট চ্যাট হ্যান্ডলিং
+    if chat_type == 'private':
+        # অ্যাডমিন চেক
+        if user.id in ADMIN_IDS:
+             await update.message.reply_text(
+                f"স্বাগতম এডমিন {user.first_name}! 🛡️\n\nআপনি অ্যাডমিন প্যানেল এক্সেস করতে পারেন।",
+                reply_markup=get_admin_menu_kb()
+            )
+        
+        # সাধারণ ইউজার ওয়েলকাম মেসেজ
+        config = await get_bot_config()
+        video_link = config.get("video_link", STATIC_CONFIG["video_link"])
+        
+        await update.message.reply_text(
+            f"হ্যালো {user.first_name}! 👋\n\nSkyzone IT-তে স্বাগতম। কাজ শুরু করার জন্য আগে ভিডিওটি দেখুন:\n🎥 {video_link}\n\nভিডিও দেখা শেষ হলে নিচের বাটনে ক্লিক করে ইন্টারভিউ শুরু করুন।",
+            reply_markup=get_main_menu_kb(),
+            disable_web_page_preview=False
+        )
+
+    # গ্রুপ চ্যাট হ্যান্ডলিং (শুধুমাত্র IT কীওয়ার্ড)
+    elif chat_type in ['group', 'supergroup']:
+        pass # গ্রুপে স্টার্ট কমান্ড ইগনোর করা হবে
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -174,15 +267,45 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     await query.answer()
 
-    user_data = get_user_data(user_id)
+    # --- ADMIN ACTIONS ---
+    if data.startswith("admin_") and user_id in ADMIN_IDS:
+        if data == "admin_stats":
+            stats = await get_stats()
+            msg = f"📊 **Skyzone IT Stats**\n\n" \
+                  f"✅ মোট পাস করেছে: {stats.get('passed_users', 0)}\n" \
+                  f"📝 মোট ইন্টারভিউ শুরু: {stats.get('total_interviews', 0)}\n" \
+                  f"📅 সার্ভার টাইম: {datetime.now().strftime('%H:%M %d/%m')}"
+            await query.edit_message_text(msg, reply_markup=get_admin_menu_kb(), parse_mode=ParseMode.MARKDOWN)
+            return
+
+        elif data == "admin_set_video":
+            context.user_data['admin_state'] = 'WAITING_VIDEO_LINK'
+            await query.edit_message_text("🎥 নতুন ভিডিও লিংকটি ইনবক্সে সেন্ড করুন:")
+            return
+
+        elif data == "admin_set_username":
+            context.user_data['admin_state'] = 'WAITING_ADMIN_USER'
+            await query.edit_message_text("👤 স্লিপে দেখানোর জন্য অ্যাডমিন ইউজারনেম সেন্ড করুন (যেমন: @MyUser):")
+            return
+            
+        elif data == "admin_close":
+            await query.delete_message()
+            return
+
+    # --- USER ACTIONS ---
+    user_data = await get_user_data(user_id)
 
     if data == "start_exam":
         if user_data.get("passed"):
-            await query.edit_message_text("✅ আপনি ইতিমধ্যে ইন্টারভিউ পাস করেছেন। আপনার স্লিপ পেতে /slip লিখুন।")
+            await query.edit_message_text("✅ আপনি ইতিমধ্যে ইন্টারভিউ পাস করেছেন। আপনার স্লিপ পেতে 'Slip' লিখুন।")
             return
         
+        # স্ট্যাটাস আপডেট: ইন্টারভিউ শুরু
+        if user_data.get("state") == "IDLE":
+             await increment_stat("total_interviews")
+
         user_data["state"] = "READY_CHECK"
-        update_user_data(user_id, user_data)
+        await update_user_data(user_id, user_data)
         
         keyboard = [[InlineKeyboardButton("✅ আমি প্রস্তুত", callback_data="confirm_ready")]]
         await query.edit_message_text("আপনি কি ১০টি প্রশ্নের উত্তর দিতে প্রস্তুত?", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -191,110 +314,144 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data["state"] = "INTERVIEW"
         user_data["q_index"] = 0
         user_data["answers"] = []
-        update_user_data(user_id, user_data)
+        await update_user_data(user_id, user_data)
         await query.edit_message_text(f"চমৎকার! ১ম প্রশ্ন:\n\n{QUESTIONS[0]['q']}")
 
     elif data == "accept_terms":
         user_data["state"] = "WAITING_PHRASE"
-        update_user_data(user_id, user_data)
-        await query.edit_message_text(f"শর্তগুলো মানলে নিচের বাক্যটি লিখে মেসেজ দিন:\n\n`{CONFIG['final_phrase']}`", parse_mode=ParseMode.MARKDOWN)
+        await update_user_data(user_id, user_data)
+        await query.edit_message_text(f"শর্তগুলো মানলে নিচের বাক্যটি লিখে মেসেজ দিন:\n\n`{STATIC_CONFIG['final_phrase']}`", parse_mode=ParseMode.MARKDOWN)
 
     elif data == "reset_me":
-        reset_user(user_id)
+        await delete_user_data(user_id)
         await query.edit_message_text("🔄 আপনার সকল তথ্য রিসেট করা হয়েছে। আপনি চাইলে আবার শুরু করতে পারেন।", reply_markup=get_main_menu_kb())
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
-    msg = update.message.text.strip()
+    msg = update.message.text.strip() if update.message.text else ""
     
+    # --- ADMIN INPUT HANDLING ---
+    if user_id in ADMIN_IDS and 'admin_state' in context.user_data:
+        state = context.user_data['admin_state']
+        if state == 'WAITING_VIDEO_LINK':
+            await update_bot_config("video_link", msg)
+            del context.user_data['admin_state']
+            await update.message.reply_text(f"✅ ভিডিও লিংক আপডেট করা হয়েছে: {msg}", reply_markup=get_admin_menu_kb())
+            return
+        elif state == 'WAITING_ADMIN_USER':
+            username = msg if msg.startswith("@") else f"@{msg}"
+            await update_bot_config("admin_username", username)
+            del context.user_data['admin_state']
+            await update.message.reply_text(f"✅ অ্যাডমিন ইউজারনেম আপডেট করা হয়েছে: {username}", reply_markup=get_admin_menu_kb())
+            return
+
+    # --- GROUP CHAT LOGIC ---
     if update.effective_chat.type != 'private':
         if msg.upper() == "IT":
             await update.message.reply_text(f"{user.mention_html()}, কাজের জন্য ইনবক্সে আসুন।", parse_mode=ParseMode.HTML)
         return
 
-    user_data = get_user_data(user_id)
+    # --- PRIVATE CHAT USER LOGIC ---
+    user_data = await get_user_data(user_id)
     state = user_data.get("state")
 
+    # কমান্ড হ্যান্ডলিং ম্যানুয়ালি (IT keyword)
     if msg.upper() == "IT":
         await update.message.reply_text("নিচের মেনু থেকে ইন্টারভিউ শুরু করুন:", reply_markup=get_main_menu_kb())
         return
 
     if state == "INTERVIEW":
         idx = user_data["q_index"]
+        # বাউন্ডারি চেক
+        if idx >= len(QUESTIONS):
+            # যদি কোনো কারণে ইনডেক্স বেশি হয়ে যায়
+            idx = len(QUESTIONS) - 1
+
         current_q = QUESTIONS[idx]
         
         is_correct = False
+        # ফাজি ম্যাচিং
         for ans in current_q['a']:
-            if token_set_ratio(msg.lower(), ans.lower()) >= current_q['threshold']:
+            ratio = token_set_ratio(msg.lower(), ans.lower())
+            if ratio >= current_q['threshold']:
                 is_correct = True
                 break
         
         if is_correct:
             user_data["answers"].append({"q": current_q['q'], "a": msg})
+            
             if idx + 1 < len(QUESTIONS):
                 user_data["q_index"] += 1
-                update_user_data(user_id, user_data)
+                await update_user_data(user_id, user_data)
                 await update.message.reply_text(f"✅ সঠিক! পরবর্তী প্রশ্ন:\n\n{QUESTIONS[idx+1]['q']}")
             else:
                 user_data["state"] = "TERMS"
-                update_user_data(user_id, user_data)
+                await update_user_data(user_id, user_data)
                 kb = [[InlineKeyboardButton("🤝 আমি সকল শর্ত মেনে নিচ্ছি", callback_data="accept_terms")]]
-                await update.message.reply_text(f"অভিনন্দন! সব প্রশ্নের উত্তর দিয়েছেন।\n\n{CONFIG['terms_text']}", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+                await update.message.reply_text(f"অভিনন্দন! সব প্রশ্নের উত্তর দিয়েছেন।\n\n{STATIC_CONFIG['terms_text']}", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
         else:
             await update.message.reply_text("❌ উত্তরটি সঠিক হয়নি। ভিডিওটি আবার দেখে চেষ্টা করুন।")
 
     elif state == "WAITING_PHRASE":
-        if token_set_ratio(msg.lower(), CONFIG['final_phrase'].lower()) > 85:
+        if token_set_ratio(msg.lower(), STATIC_CONFIG['final_phrase'].lower()) > 85:
             user_data["state"] = "PASSED"
             user_data["passed"] = True
-            update_user_data(user_id, user_data)
+            await update_user_data(user_id, user_data)
             
-            form_text = f"⚡ Official Notice ⚡\n\n✅ আপনার ইন্টারভিউ সফল হয়েছে।\n📋 এখন এই ফর্মটি পূরণ করুন: <a href='{CONFIG['form_link']}'>Form Link</a>\n\nফর্ম পূরণ শেষে আপনার স্লিপ পেতে 'Slip' লিখুন।"
+            # স্ট্যাটাস আপডেট: পাস করেছে
+            await increment_stat("passed_users")
+
+            form_text = f"⚡ Official Notice ⚡\n\n✅ আপনার ইন্টারভিউ সফল হয়েছে।\n📋 এখন এই ফর্মটি পূরণ করুন: <a href='{STATIC_CONFIG['form_link']}'>Form Link</a>\n\nফর্ম পূরণ শেষে আপনার স্লিপ পেতে 'Slip' লিখুন।"
             await update.message.reply_text(form_text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
         else:
-            await update.message.reply_text(f"ভুল হয়েছে। হুবহু এটি লিখুন: `{CONFIG['final_phrase']}`", parse_mode=ParseMode.MARKDOWN)
+            await update.message.reply_text(f"ভুল হয়েছে। হুবহু এটি লিখুন: `{STATIC_CONFIG['final_phrase']}`", parse_mode=ParseMode.MARKDOWN)
 
-    elif msg.lower() == "slip" or user_data.get("passed"):
-        if not user_data.get("passed"): return
+    elif msg.lower() == "slip" or (user_data.get("passed") and msg.lower() == "slip"):
+        if not user_data.get("passed"):
+            await update.message.reply_text("আপনি এখনো ইন্টারভিউ পাশ করেননি।")
+            return
         
+        # ডাইনামিক অ্যাডমিন নাম আনা
+        config = await get_bot_config()
+        admin_user = config.get("admin_username", "@SKYZONE_IT_ADMIN")
+
         slip = f"📄 **SKYZONE IT - RECRUITMENT SLIP**\n"
         slip += f"━━━━━━━━━━━━━━━\n"
         slip += f"👤 User: {user.first_name}\nID: <code>{user_id}</code>\n"
         slip += f"📅 Date: {datetime.now().strftime('%d/%m/%Y')}\n"
         slip += f"━━━━━━━━━━━━━━━\n"
-        for item in user_data["answers"]:
+        for item in user_data.get("answers", []):
             slip += f"• {item['a']}\n"
-        slip += f"━━━━━━━━━━━━━━━\nএই স্লিপটি এডমিনকে দিন।"
+        slip += f"━━━━━━━━━━━━━━━\n"
+        slip += f"✅ এই স্লিপটি এডমিনকে দিন: {admin_user}"
         
         await update.message.reply_text(slip, parse_mode=ParseMode.HTML)
-        # অটো এডমিন নোটিফিকেশন
+        
+        # অটো এডমিন নোটিফিকেশন (সব এডমিনকে)
         for adm in ADMIN_IDS:
             try: await context.bot.send_message(adm, f"🚀 New Candidate Passed!\n\n{slip}", parse_mode=ParseMode.HTML)
             except: pass
 
-# --- ADMIN COMMANDS ---
-async def admin_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return
-    if not context.args:
-        await update.message.reply_text("ইউজার আইডি দিন। উদাহরণ: `/reset 12345678`")
-        return
-    target_id = context.args[0]
-    reset_user(target_id)
-    await update.message.reply_text(f"✅ ইউজার {target_id} এর ডাটা রিসেট করা হয়েছে।")
+# --- ADMIN COMMAND (For direct access) ---
+async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id in ADMIN_IDS:
+        await update.message.reply_text("⚙️ অ্যাডমিন প্যানেল:", reply_markup=get_admin_menu_kb())
 
 # --- MAIN ---
 def main():
+    # ফ্লাস্ক সার্ভার ব্যাকগ্রাউন্ড থ্রেডে রান হবে
     threading.Thread(target=run_flask, daemon=True).start()
     
     app_tg = Application.builder().token(TOKEN).build()
     
     app_tg.add_handler(CommandHandler("start", start))
-    app_tg.add_handler(CommandHandler("reset", admin_reset))
+    app_tg.add_handler(CommandHandler("admin", admin_panel_command)) # নতুন অ্যাডমিন কমান্ড
     app_tg.add_handler(CallbackQueryHandler(button_handler))
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("Skyzone IT Bot is running with Firebase & Buttons...")
+    print("Skyzone IT Bot V2 is running with Optimized Firebase & Admin Panel...")
     app_tg.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
