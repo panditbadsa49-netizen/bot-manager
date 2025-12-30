@@ -349,7 +349,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # --- GROUP CHAT IGNORE ---
     if update.effective_chat.type != 'private':
-        if msg.upper() == "IT", "হ্যালো", "কি কাজ", "hello", "Hi", "আমি কাজ করতে চাই", "কাজ কি", "আমি নতুন", "আমি গ্রুপের নতুন মেম্বার", "ami group e number", "Ami notun":
+        if msg.upper() == "IT""হ্যালো""কি কাজ""hello""Hi""আমি কাজ করতে চাই""কাজ কি""আমি নতুন""আমি গ্রুপের নতুন মেম্বার""ami group e number""Ami notun":
             await update.message.reply_text(f"{user.mention_html()}, কাজের জন্য ইনবক্সে আসুন।", parse_mode=ParseMode.HTML)
         return
 
