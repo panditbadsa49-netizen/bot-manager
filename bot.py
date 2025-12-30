@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 
 # --- CONFIG DATA ---
 CONFIG = {
-    "video_link": "https://www.youtube.com/",
+    "video_link": "https://t.me/skyzoneit/6300",
     "terms_text": """ ⚠️ **আপনাকে এই শর্তগুলো দেওয়া হলো** ⚠️ 
 
 1️⃣ সাবধান: যে অ্যাপের জন্য টেক্সট তৈরি করা হবে, সেই অ্যাপেই রিভিউ দিতে হবে। ওই টেক্সট দিয়ে অন্য কোনো অ্যাপে রিভিউ দেওয়া যাবে না।
@@ -265,7 +265,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         slip += f"━━━━━━━━━━━━━━━\n"
         for item in user_data["answers"]:
             slip += f"• {item['a']}\n"
-        slip += f"━━━━━━━━━━━━━━━\nএই স্লিপটি এডমিনকে দিন।"
+        slip += f"━━━━━━━━━━━━━━━\nএই স্লিপটি এডমিনকে দিন t.me/AfMdshakil
+
+এখানে আসুন।"
         
         await update.message.reply_text(slip, parse_mode=ParseMode.HTML)
         # অটো এডমিন নোটিফিকেশন
