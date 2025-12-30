@@ -347,36 +347,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"✅ অ্যাডমিন ইউজারনেম সেট করা হয়েছে: {username}", reply_markup=get_admin_menu_kb())
             return
 
-        # --- GROUP CHAT KEYWORD FILTER ---
+            # --- GROUP CHAT KEYWORD FILTER WITH HYPERLINK ---
     if update.effective_chat.type != 'private':
-        # "IT" সহ আপনার দেওয়া সব কিওয়ার্ডের তালিকা
+        # আপনার কিওয়ার্ডের তালিকা
         keywords = [
-            "IT", 
-            "হ্যালো", 
-            "কি কাজ", 
-            "HELLO", 
-            "HI", 
-            "আমি কাজ করতে চাই", 
-            "কাজ কি", 
-            "আমি নতুন", 
-            "আমি গ্রুপের নতুন মেম্বার", 
-            "AMI GROUP E NUMBER", 
-            "AMI NOTUN"
+            "IT", "হ্যালো", "কি কাজ", "HELLO", "HI", 
+            "আমি কাজ করতে চাই", "কাজ কি", "আমি নতুন", 
+            "আমি গ্রুপের নতুন মেম্বার", "AMI GROUP E NUMBER", "AMI NOTUN"
         ]
         
-        # মেসেজটি থেকে অপ্রয়োজনীয় স্পেস সরিয়ে বড় হাতের অক্ষরে কনভার্ট করা হচ্ছে
+        # মেসেজ চেক করা
         incoming_msg = msg.strip().upper() if msg else ""
 
-        # কিওয়ার্ড লিস্টের কোনো একটি শব্দ ইউজারের মেসেজে আছে কি না তা চেক করা হচ্ছে
         if any(word.upper() in incoming_msg for word in keywords):
+            # আপনার কাঙ্ক্ষিত লিঙ্কটি এখানে দিন
+            my_link = "https://t.me/skyzoneit/6300" 
+            
+            # হাইপারলিঙ্ক সহ মেসেজ (HTML ফরম্যাটে)
+            text = (
+                f"{user.mention_html()}, কাজের জন্য "
+                f"<a href='{my_link}'>লিংকে ক্লিক করুন</a>।"
+            )
+            
             await update.message.reply_text(
-                f"{user.mention_html()}, কাজের জন্য ইনবক্সে আসুন।", 
-                parse_mode=ParseMode.HTML
+                text, 
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=False # লিঙ্ক প্রিভিউ দেখাতে চাইলে True দিতে পারেন
             )
             return
         
         return
-
     # --- USER LOGIC ---
     if msg.upper() == "IT":
         await update.message.reply_text("নিচের মেনু থেকে ইন্টারভিউ শুরু করুন:", reply_markup=get_main_menu_kb())
