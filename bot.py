@@ -347,16 +347,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"✅ অ্যাডমিন ইউজারনেম সেট করা হয়েছে: {username}", reply_markup=get_admin_menu_kb())
             return
 
-            import difflib
-from telegram.constants import ParseMode
-
-async def handle_group_keywords(update, context, msg, user):
-    """
-    এই ফাংশনটি গ্রুপ চ্যাটে নতুন মেম্বারদের কি-ওয়ার্ড শনাক্ত করে অটো-রিপ্লাই দেয়।
-    অ্যাডমিনদের মেসেজ ইগনোর করে এবং বানান ভুল থাকলেও শনাক্ত করতে পারে।
-    """
-    
-    # --- গ্রুপ চ্যাট ফিল্টার ---
+         # --- গ্রুপ চ্যাট ফিল্টার ---
     if update.effective_chat.type != 'private':
         
         user_id = update.effective_user.id
