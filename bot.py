@@ -377,14 +377,13 @@ async def handle_group_messages(update, context):
 
         # ৪. কিওয়ার্ড লিস্ট
         keywords = [
-            "it", "হ্যালো", "hello", "hi", "하이", "কি কাজ", "কাজ কি", "কাজ কী", 
-            "kaj ki", "ki kaj", "আমি কাজ করতে চাই", "ami kaj korte chai", 
-            "কাজ চাই", "আমি নতুন", "ami notun", "i am new", "ami new", 
-            "আমি গ্রুপের নতুন মেম্বার", "ami group e number", "ami group e notun",
-            "কিভাবে কাজ করব", "help me", "টাকা ইনকাম", "income", 
-            "কাজ শিখব", "ভাই কাজ আছে", "kaj ache", "kaj hobe", "work"
+            "IT", "হ্যালো", "HELLO", "HI", "하이", "কি কাজ", "কাজ কি", "কাজ কী", 
+            "KAJ KI", "KI KAJ", "আমি কাজ করতে চাই", "AMI KAJ KORTE CHAI", 
+            "কাজ চাই", "আমি নতুন", "AMI NOTUN", "I AM NEW", "AMI NEW", 
+            "আমি গ্রুপের নতুন মেম্বার", "AMI GROUP E NUMBER", "AMI GROUP E NOTUN",
+            "কিভাবে কাজ করব", "HELP ME", "টাকা ইনকাম", "INCOME", 
+            "কাজ শিখব", "ভাই কাজ আছে", "KAJ ACHE", "KAJ HOBE", "WORK"
         ]
-
         # ৫. ম্যাচ শনাক্তকরণ লজিক
         match_found = any(key in msg for key in keywords)
 
