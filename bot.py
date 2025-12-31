@@ -27,6 +27,7 @@ ADMIN_IDS_STR = os.environ.get("ADMIN_IDS", "7870088579,7259050773")
 GROUP_CHAT_ID = os.environ.get("GROUP_CHAT_ID", "-1002337825231")
 SERVICE_ACCOUNT_JSON = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "")
 
+# অ্যাডমিন আইডি হ্যান্ডলিং
 try:
     ADMIN_IDS = [int(x.strip()) for x in ADMIN_IDS_STR.split(",") if x.strip().isdigit()]
 except:
@@ -51,8 +52,10 @@ users_ref = db.collection("users")
 settings_ref = db.collection("bot_settings").document("config")
 stats_ref = db.collection("bot_stats").document("general")
 
+# --- PERFORMANCE TUNING ---
 executor = ThreadPoolExecutor(max_workers=20)
 
+# --- GLOBAL CACHE (SPEED BOOST) ---
 GLOBAL_CONFIG = {
     "video_link": "https://t.me/skyzoneit/6300",
     "admin_username": "@SKYZONE_IT_ADMIN"
@@ -80,14 +83,54 @@ def run_flask():
     except:
         pass
 
+# --- LOGGING ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # --- STATIC CONTENT ---
 STATIC_CONFIG = {
     "terms_text": """ ⚠️ **আপনাকে এই শর্তগুলো দেওয়া হলো** ⚠️
-... (শর্তাবলী পূর্বের ন্যায়) ...
-""",
+    1️⃣ সাবধান: যে অ্যাপের জন্য টেক্সট তৈরি করা হবে, সেই অ্যাপেই রিভিউ দিতে হবে। ওই টেক্সট দিয়ে অন্য কোনো অ্যাপে রিভিউ দেওয়া যাবে না।
+
+2️⃣ একবার সাবমিট: আপনি যে অ্যাপে কাজ সাবমিট করবেন, একবার করে ফেললে দ্বিতীয়বার আর সেই কাজ সাবমিট করবেন না।
+
+3️⃣ সময় মেনে চলা: অ্যাপস যে সময় দেওয়া থাকবে, সেই সময় থেকেই কাজ শুরু করবেন।
+
+4️⃣ একটি ফোন, একটি জিমেইল: আপনি যে অ্যাপে একবার রিভিউ দিবেন, একটি ফোন ও একটি জিমেইল দিয়ে। ওই অ্যাপে যে ফোন দিয়ে রিভিউ দিয়েছেন, সেই ফোন দিয়ে আর রিভিউ দেওয়া যাবে না। ওই অ্যাপে
+
+5️⃣ নতুন মানুষ আনা: মনে রাখবেন, আপনি যেভাবে এখানে এসেছেন, ঠিক সেইভাবেই অন্যদেরও নিয়ে আসবেন।
+
+6️⃣ সঠিক গ্রুপ এড: আপনার থেকে বেশি বোঝে এমন কাউকে গ্রুপে এড করবেন না।
+
+7️⃣ পেমেন্ট স্ক্রিনশট: পেমেন্ট পাওয়ার পর পেমেন্টের স্ক্রিনশট গ্রুপে পোস্ট করতে হবে।
+
+8️⃣ ভদ্র আচরণ: সবার সাথে ভালো ব্যবহার করবেন এবং যাদের নিয়ে আসবেন, তাদের সাথেও ভদ্র আচরণ করবেন।
+
+9️⃣ ২৪ ঘণ্টা নিয়ম: আপনি যাদের দিয়ে রিভিউ করাবেন, তাদেরকে ২৪ ঘণ্টা পর গ্রুপে এড করতে হবে।
+
+🔟 সমস্যা সমাধান: কোনো সমস্যা হলে ভিডিও দেখে সমাধান করবেন।
+সতর্কবার্তা:
+❌ আপনার নেটওয়ার্কের ভেতরে যেগুলো ডিভাইস থাকবে সেগুলো থেকে রিভিউ দিতে পারবেন না
+❌ নির্ধারিত সময়ের আগে মার্কেটিং করা
+❌ আগে থেকেই ওয়ার্কার ঠিক করে রাখা
+❌ সাবমিট অপশন চালু হতেই সঙ্গে সঙ্গে সাবমিট করে ফেলা
+❌একই লোকেশন থেকে একাধিক রিভিউ দেওয়া যাবে না, ফ্যামিলি এবং নিজের ফোন থেকে রিভিউ দেওয়া যাবে না❌
+
+ফলাফল:
+🚫 আপনার অ্যাকাউন্ট ব্যান হবে 
+🚫 ব্যালেন্স ফ্রিজ করা হবে 
+🚫 আর কখনো কাজ করতে পারবেন না
+👉 তাই সাবধান থাকবেন।
+অ্যাপসে যে সময় দেওয়া থাকবে, সেই সময় থেকে মার্কেটিং শুরু করবেন।
+তারপর কোনো ওয়ার্কার যদি নক করে, তখনই কাজ শুরু ও সাবমিট করবেন।
+শুধু যে কাজ দেওয়া হবে সেটাই সাবমিট করতে হবে।
+⚠️ আগেভাগে মার্কেটিং বা লোক তৈরি করলে আপনার অ্যাকাউন্টও ব্যান হয়ে যাবে, ব্যালেন্স জিরো হয়ে যাবে।
+💖 আমরা আপনাদের সব সময় ভালো চাই।
+💡 মনে রাখবেন, এখানে কেউ আপনার কাছে টাকা চাবে না।
+🌟 ভালো থাকবেন।
+সকল শর্ত মেনে চললে আমাকে রিপ্লাই দিন "ইনশাআল্লাহ আমি পারবো" এটা লিখে
+
+**শর্ত মেনে চললে নিচের বাটনে ক্লিক করুন।**""",
     "final_phrase": "ইনশাআল্লাহ আমি পারবো",
     "form_link": "https://forms.gle/TYdZFiFEJcrDcD2r5",
 }
@@ -105,6 +148,7 @@ QUESTIONS = [
     {"id": 10, "q": "🔟 আপনি কীভাবে মার্কেটিং করতে চান? (সংক্ষেপে)", "a": ["Facebook e post kore", "ফেসবুক মার্কেটিং করে", "ফেসবুক মার্কেটিং করে বিভিন্ন গ্রুপে পোস্ট করে", "ফেসবুক গ্রুপে পোস্ট করে", "userder sathe contect kore", "social media", "marketing kore"], "threshold": 50}
 ]
 
+# --- CACHE MANAGER ---
 async def load_config_to_cache():
     global GLOBAL_CONFIG
     try:
@@ -123,6 +167,7 @@ async def update_config_cache(key, value):
     GLOBAL_CONFIG[key] = value
     await async_firestore_set(settings_ref, {key: value}, merge=True)
 
+# --- STATS HELPERS ---
 async def increment_stat(field):
     try:
         loop = asyncio.get_running_loop()
@@ -139,6 +184,7 @@ async def get_stats_safe():
         pass
     return {}
 
+# --- USER DATA HELPERS ---
 async def get_user_data(user_id):
     try:
         doc = await async_firestore_get(users_ref.document(str(user_id)))
@@ -155,6 +201,7 @@ async def delete_user_data(user_id):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(executor, lambda: users_ref.document(str(user_id)).delete())
 
+# --- KEYBOARDS ---
 def get_main_menu_kb():
     keyboard = [
         [InlineKeyboardButton("🚀 ইন্টারভিউ শুরু করুন", callback_data="start_exam")],
@@ -172,10 +219,12 @@ def get_admin_menu_kb():
     ]
     return InlineKeyboardMarkup(keyboard)
 
+# --- HANDLERS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
         chat_type = update.effective_chat.type
+
         if chat_type == 'private':
             if user.id in ADMIN_IDS:
                 try:
@@ -185,12 +234,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         parse_mode=ParseMode.MARKDOWN
                     )
                 except: pass
+
             video_link = GLOBAL_CONFIG.get("video_link", "https://t.me/skyzoneit/6300")
+            
             await update.message.reply_text(
                 f"হ্যালো {user.first_name}! 👋\n\nSkyzone IT-তে স্বাগতম। কাজ শুরু করার জন্য আগে ভিডিওটি দেখুন:\n🎥 {video_link}\n\nভিডিও দেখা শেষ হলে নিচের বাটনে ক্লিক করে ইন্টারভিউ শুরু করুন।",
                 reply_markup=get_main_menu_kb(),
                 disable_web_page_preview=False
             )
+        
     except Exception as e:
         logger.error(f"Start Error: {e}")
         await update.message.reply_text("হ্যালো! বট চালু আছে। নিচে ক্লিক করুন:", reply_markup=get_main_menu_kb())
@@ -199,13 +251,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     data = query.data
+    
     try: await query.answer()
     except: pass
 
     if data.startswith("admin_") and user_id in ADMIN_IDS:
         if data == "admin_stats":
             stats = await get_stats_safe()
-            msg = f"📊 **Live Stats**\n\n✅ Passed Users: {stats.get('passed_users', 0)}\n📝 Interviews Started: {stats.get('total_interviews', 0)}\n📅 Time: {datetime.now().strftime('%H:%M')}"
+            msg = f"📊 **Live Stats**\n\n" \
+                  f"✅ Passed Users: {stats.get('passed_users', 0)}\n" \
+                  f"📝 Interviews Started: {stats.get('total_interviews', 0)}\n" \
+                  f"📅 Time: {datetime.now().strftime('%H:%M')}"
             await query.edit_message_text(msg, reply_markup=get_admin_menu_kb(), parse_mode=ParseMode.MARKDOWN)
             return
         elif data == "admin_set_video":
@@ -221,6 +277,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     user_data = await get_user_data(user_id)
+
     if data == "start_exam":
         if user_data.get("passed"):
             await query.edit_message_text("✅ আপনি ইতিমধ্যে ইন্টারভিউ পাস করেছেন। আপনার স্লিপ পেতে 'Slip' লিখুন।")
@@ -245,53 +302,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await delete_user_data(user_id)
         await query.edit_message_text("🔄 আপনার সকল তথ্য রিসেট করা হয়েছে। আপনি চাইলে আবার শুরু করতে পারেন।", reply_markup=get_main_menu_kb())
 
-async def handle_group_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_message or not update.effective_message.text:
         return
-    if update.effective_chat.type != 'private':
-        try:
-            user_id = update.effective_user.id
-            chat_id = update.effective_chat.id
-            member = await context.bot.get_chat_member(chat_id, user_id)
-            if member.status in ['creator', 'administrator']:
-                return
-        except Exception: pass
 
-        msg = update.effective_message.text.strip().lower()
-        user = update.effective_user
-        my_link = GLOBAL_CONFIG.get("video_link", "https://t.me/skyzoneit/6300")
-        
-        keywords = [
-            "it", "হ্যালো", "hello", "hi", "হাই", "কি কাজ", "কাজ কি", "কাজ কী", 
-            "kaj ki", "ki kaj", "আমি কাজ করতে চাই", "ami kaj korte chai", 
-            "কাজ চাই", "আমি নতুন", "ami notun", "i am new", "ami new", 
-            "কিভাবে কাজ করব", "help me", "income", "কাজ শিখব", "kaj ache", "work"
-        ]
-        
-        if any(key in msg for key in keywords):
-            response_text = (
-                f"আসসালামু আলাইকুম {user.mention_html()}!\n\n"
-                f"আপনি যদি আমাদের সাথে <b>কাজ করতে চান</b>, তবে নিচের নিয়মটি ফলো করুন:\n\n"
-                f"✅ প্রথমে <a href='{my_link}'>এখানে ক্লিক করে ইনবক্সে আসুন</a>।\n"
-                f"✅ ইনবক্সে এসে সরাসরি <b>'IT'</b> লিখে মেসেজ দিন।\n"
-                f"✅ তারপর কাজের ভিডিও এবং বিস্তারিত তথ্য অটোমেটিক পেয়ে যাবেন।\n\n"
-                f"<i>অনুগ্রহ করে উপরের তথ্যগুলো ভালো করে পড়ে লিংকে ক্লিক করুন।</i>"
-            )
-            try:
-                await update.effective_message.reply_text(response_text, parse_mode='HTML', disable_web_page_preview=True)
-            except Exception as e:
-                logger.error(f"Group Reply Error: {e}")
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # যদি মেসেজটি গ্রুপ থেকে আসে, তবে গ্রুপ হ্যান্ডলারে পাঠাও
+    # --- GROUP MESSAGE HANDLER REDIRECT ---
     if update.effective_chat.type != 'private':
         await handle_group_messages(update, context)
         return
 
     user = update.effective_user
     user_id = user.id
-    msg = update.message.text.strip() if update.message.text else ""
+    msg = update.message.text.strip()
     
+    # --- ADMIN INPUT ---
     if user_id in ADMIN_IDS and 'admin_state' in context.user_data:
         state = context.user_data['admin_state']
         if state == 'WAITING_VIDEO_LINK':
@@ -306,6 +330,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"✅ অ্যাডমিন ইউজারনেম সেট করা হয়েছে: {username}", reply_markup=get_admin_menu_kb())
             return
 
+    # --- USER LOGIC ---
     if msg.upper() == "IT":
         await update.message.reply_text("নিচের মেনু থেকে ইন্টারভিউ শুরু করুন:", reply_markup=get_main_menu_kb())
         return
@@ -317,11 +342,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         idx = user_data.get("q_index", 0)
         if idx >= len(QUESTIONS): idx = len(QUESTIONS) - 1
         current_q = QUESTIONS[idx]
+        
         is_correct = False
         for ans in current_q['a']:
             if token_set_ratio(msg.lower(), ans.lower()) >= current_q['threshold']:
                 is_correct = True
                 break
+        
         if is_correct:
             user_data["answers"].append({"q": current_q['q'], "a": msg})
             if idx + 1 < len(QUESTIONS):
@@ -361,9 +388,62 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try: await context.bot.send_message(adm, f"🚀 New Candidate Passed!\n\n{slip}", parse_mode=ParseMode.HTML)
             except: pass
 
+async def handle_group_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_message or not update.effective_message.text:
+        return
+
+    if update.effective_chat.type != 'private':
+        try:
+            user_id = update.effective_user.id
+            chat_id = update.effective_chat.id
+            member = await context.bot.get_chat_member(chat_id, user_id)
+            if member.status in ['creator', 'administrator']:
+                return
+        except Exception:
+            pass
+
+        msg = update.effective_message.text.strip().lower()
+        user = update.effective_user
+        my_link = GLOBAL_CONFIG.get("video_link", "https://t.me/skyzoneit/6300")
+
+        keywords = [
+            "it", "হ্যালো", "hello", "hi", "হাই", "কি কাজ", "কাজ কি", "কাজ কী", 
+            "kaj ki", "ki kaj", "আমি কাজ করতে চাই", "ami kaj korte chai", 
+            "কাজ চাই", "আমি নতুন", "ami notun", "i am new", "ami new", 
+            "আমি গ্রুপের নতুন মেম্বার", "ami group e number", "ami group e notun",
+            "কিভাবে কাজ করব", "help me", "টাকা ইনকাম", "income", 
+            "কাজ শিখব", "ভাই কাজ আছে", "kaj ache", "kaj hobe", "work"
+        ]
+        
+        match_found = any(key in msg for key in keywords)
+
+        if match_found:
+            bot_username = (await context.bot.get_me()).username
+            start_link = f"https://t.me/{bot_username}?start=it"
+            
+            response_text = (
+                f"আসসালামু আলাইকুম {user.mention_html()}!\n\n"
+                f"আপনি যদি আমাদের সাথে <b>কাজ করতে চান</b>, তবে নিচের নিয়মটি ফলো করুন:\n\n"
+                f"✅ প্রথমে <a href='{start_link}'>এখানে ক্লিক করে বটের ইনবক্সে আসুন</a>।\n"
+                f"✅ ইনবক্সে এসে সরাসরি <b>'IT'</b> লিখে মেসেজ দিন।\n"
+                f"✅ তারপর কাজের ভিডিও এবং বিস্তারিত তথ্য অটোমেটিক পেয়ে যাবেন।\n\n"
+                f"<i>অনুগ্রহ করে উপরের তথ্যগুলো ভালো করে পড়ে লিংকে ক্লিক করুন।</i>"
+            )
+            
+            try:
+                await update.effective_message.reply_text(
+                    response_text, 
+                    parse_mode='HTML', 
+                    disable_web_page_preview=True
+                )
+            except Exception as e:
+                logger.error(f"Error sending group reply: {e}")
+
+# --- POST INIT HOOK ---
 async def post_init(application: Application):
     await load_config_to_cache()
 
+# --- MAIN ---
 def main():
     threading.Thread(target=run_flask, daemon=True).start()
     app_tg = Application.builder().token(TOKEN).post_init(post_init).build()
@@ -371,11 +451,10 @@ def main():
     app_tg.add_handler(CommandHandler("start", start))
     app_tg.add_handler(CommandHandler("admin", start))
     app_tg.add_handler(CallbackQueryHandler(button_handler))
-    
-    # MessageHandler এ filters.TEXT দিয়ে ইনবক্স এবং গ্রুপ উভয়কেই প্রসেস করা হচ্ছে
+    # গ্রুপের মেসেজ এবং প্রাইভেট মেসেজ উভয়ই এই হ্যান্ডলারের মাধ্যমে প্রসেস হবে
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("Skyzone IT Bot Fixed version running...")
+    print("Skyzone IT Bot Optimized V3 is running...")
     app_tg.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
