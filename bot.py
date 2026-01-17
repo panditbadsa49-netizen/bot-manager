@@ -57,7 +57,7 @@ executor = ThreadPoolExecutor(max_workers=20)
 
 # --- GLOBAL CACHE (SPEED BOOST) ---
 GLOBAL_CONFIG = {
-    "video_link": "https://youtu.be/Yh1No2eDBuU?si=wJvjBMrEjakBOEgb",
+    "video_link": "https://t.me/skyzoneit/6300",
     "admin_username": "@SKYZONE_IT_ADMIN"
 }
 
@@ -235,7 +235,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                 except: pass
 
-            video_link = GLOBAL_CONFIG.get("video_link", "https://youtu.be/Yh1No2eDBuU?si=wJvjBMrEjakBOEgb")
+            video_link = GLOBAL_CONFIG.get("video_link", "https://t.me/skyzoneit/6300")
             
             await update.message.reply_text(
                 f"হ্যালো {user.first_name}! 👋\n\nSkyzone IT-তে স্বাগতম। কাজ শুরু করার জন্য আগে ভিডিওটি দেখুন:\n🎥 {video_link}\n\nভিডিও দেখা শেষ হলে নিচের বাটনে ক্লিক করে ইন্টারভিউ শুরু করুন।",
@@ -404,7 +404,9 @@ async def handle_group_messages(update: Update, context: ContextTypes.DEFAULT_TY
 
         msg = update.effective_message.text.strip().lower()
         user = update.effective_user
-        my_link = GLOBAL_CONFIG.get("video_link", "https://youtu.be/Yh1No2eDBuU?si=wJvjBMrEjakBOEgb")
+        
+        # অ্যাডমিন প্যানেল থেকে সেট করা ভিডিও লিংক
+        video_link = GLOBAL_CONFIG.get("video_link", "https://t.me/skyzoneit/6300")
 
         keywords = [
             "it", "হ্যালো", "hello", "hi", "হাই", "কি কাজ", "কাজ কি", "কাজ কী", 
@@ -418,23 +420,19 @@ async def handle_group_messages(update: Update, context: ContextTypes.DEFAULT_TY
         match_found = any(key in msg for key in keywords)
 
         if match_found:
-            bot_username = (await context.bot.get_me()).username
-            video_link = GLOBAL_CONFIG.get("video_link", "https://youtu.be/Yh1No2eDBuU?si=wJvjBMrEjakBOEgb")
-            
+            # নতুন ব্যবহারকারীদের জন্য সরাসরি ভিডিও লিংক এবং নির্দেশনা
             response_text = (
                 f"আসসালামু আলাইকুম {user.mention_html()}!\n\n"
-                f"আপনি যদি আমাদের সাথে <b>কাজ করতে চান</b>, তবে নিচের নিয়মটি ফলো করুন:\n\n"
-                f"✅ প্রথমে <a href='{video_link}'>এখানে ক্লিক করে বটের ইনবক্সে আসুন</a>।\n"
-                f"✅ ইনবক্সে এসে সরাসরি <b>'IT'</b> লিখে মেসেজ দিন।\n"
-                f"✅ তারপর কাজের ভিডিও এবং বিস্তারিত তথ্য অটোমেটিক পেয়ে যাবেন।\n\n"
-                f"<i>অনুগ্রহ করে উপরের তথ্যগুলো ভালো করে পড়ে লিংকে ক্লিক করুন।</i>"
+                f"যেহেতু আপনি আমাদের এখানে নতুন। তাই ভিডিওটি দেখুন। "
+                f"এই ভিডিওটি দেখে আপনি কাজ শিখুন এবং কি করতে হবে বুঝে যাবেন।\n\n"
+                f"🎥 <b>কাজের ভিডিও লিংক:</b>\n{video_link}"
             )
             
             try:
                 await update.effective_message.reply_text(
                     response_text, 
                     parse_mode='HTML', 
-                    disable_web_page_preview=True
+                    disable_web_page_preview=False # ভিডিও প্রিভিউ দেখানোর জন্য False রাখা হলো
                 )
             except Exception as e:
                 logger.error(f"Error sending group reply: {e}")
