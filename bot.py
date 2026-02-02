@@ -3,6 +3,7 @@ import json
 import logging
 import asyncio
 import threading
+import requests  # Groq API কল করার জন্য
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
@@ -23,6 +24,9 @@ from rapidfuzz.fuzz import token_set_ratio
 
 # --- CONFIGURATION ---
 TOKEN = os.environ.get("BOT_TOKEN", "")
+# Groq API Key এনভায়রনমেন্ট ভেরিয়েবল থেকে আনা হবে
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "") 
+
 ADMIN_IDS_STR = os.environ.get("ADMIN_IDS", "7870088579,7259050773")
 GROUP_CHAT_ID = os.environ.get("GROUP_CHAT_ID", "-1002337825231")
 SERVICE_ACCOUNT_JSON = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "")
@@ -56,9 +60,11 @@ stats_ref = db.collection("bot_stats").document("general")
 executor = ThreadPoolExecutor(max_workers=20)
 
 # --- GLOBAL CACHE (SPEED BOOST) ---
+# ai_mode ডিফল্টভাবে False থাকবে (Classic Mode)
 GLOBAL_CONFIG = {
     "video_link": "https://t.me/skyzoneit/6300",
-    "admin_username": "@SKYZONE_IT_ADMIN"
+    "admin_username": "@SKYZONE_IT_ADMIN",
+    "ai_mode": False 
 }
 
 async def async_firestore_get(doc_ref):
@@ -68,6 +74,68 @@ async def async_firestore_get(doc_ref):
 async def async_firestore_set(doc_ref, data, merge=True):
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(executor, lambda: doc_ref.set(data, merge=merge))
+
+# --- GROQ AI INTERVIEW LOGIC ---
+def check_answer_with_groq(question, user_answer, expected_context):
+    """
+    Groq API ব্যবহার করে উত্তর যাচাই করবে।
+    এটি থ্রেডপুলে রান হবে যাতে বট স্লো না হয়।
+    """
+    if not GROQ_API_KEY:
+        return False # API Key না থাকলে ফেইল করাবে
+
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    # প্রম্পট ইঞ্জিনিয়ারিং: AI কে বলা হচ্ছে সে একজন পরীক্ষক
+    system_prompt = (
+        "You are a strict recruitment exam evaluator for a Bangladeshi IT Support group. "
+        "Analyze the User's Answer strictly based on the Question and Expected Context/Keywords. "
+        "The user will answer in Bengali or Banglish. "
+        "If the answer matches the intent of the expected context, return 'YES'. "
+        "If the answer is irrelevant, wrong, or nonsense, return 'NO'. "
+        "Do not explain. Just reply YES or NO."
+    )
+
+    user_prompt = f"""
+    Question: {question}
+    Expected Key Points: {expected_context}
+    User Answer: {user_answer}
+    
+    Is this answer correct?
+    """
+
+    data = {
+        "model": "llama3-8b-8192", # অথবা "mixtral-8x7b-32768" যা আপনার পছন্দ
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.2, # কম টেম্পারেচার মানে বেশি সঠিক এবং কম ক্রিয়েটিভ উত্তর
+        "max_tokens": 5
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data, timeout=5)
+        if response.status_code == 200:
+            result = response.json()['choices'][0]['message']['content'].strip().upper()
+            return "YES" in result
+        else:
+            logging.error(f"Groq API Error: {response.text}")
+            return False # API এরর হলে সেইফটির জন্য ফলস
+    except Exception as e:
+        logging.error(f"Groq Connection Error: {e}")
+        return False
+
+async def async_ai_validate(question, user_answer, expected_keywords):
+    loop = asyncio.get_running_loop()
+    # Keywords গুলোকে একটি স্ট্রিংয়ে কনভার্ট করে AI কে দেওয়া হবে কন্টেক্সট হিসেবে
+    context_str = ", ".join(expected_keywords)
+    return await loop.run_in_executor(executor, check_answer_with_groq, question, user_answer, context_str)
+
 
 # --- FLASK SERVER ---
 app = Flask(__name__)
@@ -158,6 +226,7 @@ async def load_config_to_cache():
             GLOBAL_CONFIG.update(data)
             logger.info("Config loaded to RAM")
         else:
+            # ডিফল্ট কনফিগারেশনে ai_mode যুক্ত করা হলো
             await async_firestore_set(settings_ref, GLOBAL_CONFIG)
     except Exception as e:
         logger.error(f"Config Load Error: {e}")
@@ -211,7 +280,11 @@ def get_main_menu_kb():
     return InlineKeyboardMarkup(keyboard)
 
 def get_admin_menu_kb():
+    # ডাইনামিক বাটন যা দেখাবে এখন কোন মোড অন আছে
+    ai_status = "🟢 ON" if GLOBAL_CONFIG.get("ai_mode") else "🔴 OFF"
+    
     keyboard = [
+        [InlineKeyboardButton(f"🤖 AI Mode: {ai_status}", callback_data="toggle_ai")],
         [InlineKeyboardButton("📊 পরিসংখ্যান (Stats)", callback_data="admin_stats")],
         [InlineKeyboardButton("🎥 ভিডিও লিংক পরিবর্তন", callback_data="admin_set_video")],
         [InlineKeyboardButton("👤 অ্যাডমিন ইউজারনেম সেট", callback_data="admin_set_username")],
@@ -228,8 +301,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if chat_type == 'private':
             if user.id in ADMIN_IDS:
                 try:
+                    # এডমিন প্যানেল ওপেন করার সময় বর্তমান মোড স্ট্যাটাস চেক করা হবে
+                    mode_text = "🤖 **AI Interview**" if GLOBAL_CONFIG.get("ai_mode") else "📝 **Classic Interview**"
                     await update.message.reply_text(
-                        f"⚙️ **Admin Control Panel**\nস্বাগতম {user.first_name}!",
+                        f"⚙️ **Admin Control Panel**\n"
+                        f"Current Mode: {mode_text}\n"
+                        f"স্বাগতম {user.first_name}!",
                         reply_markup=get_admin_menu_kb(),
                         parse_mode=ParseMode.MARKDOWN
                     )
@@ -255,26 +332,42 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try: await query.answer()
     except: pass
 
-    if data.startswith("admin_") and user_id in ADMIN_IDS:
-        if data == "admin_stats":
-            stats = await get_stats_safe()
-            msg = f"📊 **Live Stats**\n\n" \
-                  f"✅ Passed Users: {stats.get('passed_users', 0)}\n" \
-                  f"📝 Interviews Started: {stats.get('total_interviews', 0)}\n" \
-                  f"📅 Time: {datetime.now().strftime('%H:%M')}"
-            await query.edit_message_text(msg, reply_markup=get_admin_menu_kb(), parse_mode=ParseMode.MARKDOWN)
-            return
-        elif data == "admin_set_video":
-            context.user_data['admin_state'] = 'WAITING_VIDEO_LINK'
-            await query.edit_message_text("🎥 নতুন ভিডিও লিংকটি ইনবক্সে সেন্ড করুন:")
-            return
-        elif data == "admin_set_username":
-            context.user_data['admin_state'] = 'WAITING_ADMIN_USER'
-            await query.edit_message_text("👤 স্লিপে দেখানোর জন্য অ্যাডমিন ইউজারনেম সেন্ড করুন (Example: @MyUser):")
-            return
-        elif data == "admin_close":
-            await query.delete_message()
-            return
+    if data.startswith("admin_") or data == "toggle_ai":
+        if user_id in ADMIN_IDS:
+            if data == "toggle_ai":
+                # টগল লজিক: অন থাকলে অফ হবে, অফ থাকলে অন হবে
+                current_mode = GLOBAL_CONFIG.get("ai_mode", False)
+                new_mode = not current_mode
+                await update_config_cache("ai_mode", new_mode)
+                
+                status_text = "✅ AI Mode ENABLED" if new_mode else "🚫 AI Mode DISABLED"
+                if new_mode and not GROQ_API_KEY:
+                    status_text += "\n⚠️ WARNING: GROQ_API_KEY not found!"
+                
+                await query.edit_message_text(f"{status_text}\n\nনিচের মেনু আপডেট হয়েছে:", reply_markup=get_admin_menu_kb())
+                return
+
+            elif data == "admin_stats":
+                stats = await get_stats_safe()
+                mode_now = "🤖 AI" if GLOBAL_CONFIG.get("ai_mode") else "📝 Classic"
+                msg = f"📊 **Live Stats**\n\n" \
+                      f"🕹 System Mode: **{mode_now}**\n" \
+                      f"✅ Passed Users: {stats.get('passed_users', 0)}\n" \
+                      f"📝 Interviews Started: {stats.get('total_interviews', 0)}\n" \
+                      f"📅 Time: {datetime.now().strftime('%H:%M')}"
+                await query.edit_message_text(msg, reply_markup=get_admin_menu_kb(), parse_mode=ParseMode.MARKDOWN)
+                return
+            elif data == "admin_set_video":
+                context.user_data['admin_state'] = 'WAITING_VIDEO_LINK'
+                await query.edit_message_text("🎥 নতুন ভিডিও লিংকটি ইনবক্সে সেন্ড করুন:")
+                return
+            elif data == "admin_set_username":
+                context.user_data['admin_state'] = 'WAITING_ADMIN_USER'
+                await query.edit_message_text("👤 স্লিপে দেখানোর জন্য অ্যাডমিন ইউজারনেম সেন্ড করুন (Example: @MyUser):")
+                return
+            elif data == "admin_close":
+                await query.delete_message()
+                return
 
     user_data = await get_user_data(user_id)
 
@@ -344,10 +437,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         current_q = QUESTIONS[idx]
         
         is_correct = False
-        for ans in current_q['a']:
-            if token_set_ratio(msg.lower(), ans.lower()) >= current_q['threshold']:
-                is_correct = True
-                break
+        
+        # --- লজিক চেক: AI মোড নাকি ক্লাসিক মোড ---
+        if GLOBAL_CONFIG.get("ai_mode", False) and GROQ_API_KEY:
+            # AI দিয়ে উত্তর চেক করা হচ্ছে
+            await context.bot.send_chat_action(chat_id=user_id, action="typing") # টাইপিং ইন্ডিকেটর
+            is_correct = await async_ai_validate(current_q['q'], msg, current_q['a'])
+        else:
+            # আগের Fuzzy Logic (Classic Mode)
+            for ans in current_q['a']:
+                if token_set_ratio(msg.lower(), ans.lower()) >= current_q['threshold']:
+                    is_correct = True
+                    break
         
         if is_correct:
             user_data["answers"].append({"q": current_q['q'], "a": msg})
@@ -452,7 +553,7 @@ def main():
     # গ্রুপের মেসেজ এবং প্রাইভেট মেসেজ উভয়ই এই হ্যান্ডলারের মাধ্যমে প্রসেস হবে
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("Skyzone IT Bot Optimized V3 is running...")
+    print("Skyzone IT Bot Optimized V3 with Groq AI is running...")
     app_tg.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
